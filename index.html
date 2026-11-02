@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Tile Printer</title>
+<style>
+:root{--bg:#f4f4f1;--card:#fff;--ink:#1c1c1a;--muted:#6b6b66;--line:#dcdcd5;--accent:#2f6fed;--accent-ink:#fff;--warn:#b45309;--bad:#c62828;--tint:#eef3ff}
+@media (prefers-color-scheme:dark){:root{--bg:#141414;--card:#1e1e1e;--ink:#f0f0ec;--muted:#9a9a93;--line:#363636;--accent:#6b9bff;--accent-ink:#0b1020;--warn:#f59e0b;--bad:#ff6b6b;--tint:#1b2538}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
+.app{max-width:1180px;margin:0 auto;padding:16px 16px 56px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+h1{font-size:22px;margin:0}
+.sub{color:var(--muted);margin:2px 0 0;font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.card h2{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:0 0 10px;font-weight:700}
+.grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+@media(min-width:900px){
+  .grid{grid-template-columns:400px minmax(0,1fr)}
+  .preview{position:sticky;top:12px;align-self:start;max-height:calc(100vh - 24px);overflow:auto}
+}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{flex:1;padding:8px 6px;min-height:44px;border:0;border-right:1px solid var(--line);background:transparent;color:var(--ink);font:inherit;font-size:14px;cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.seg.small{display:inline-flex}
+.seg.small button{padding:6px 14px}
+label.f{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+input[type=number],select{width:100%;min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit;font-size:16px}
+.row{display:flex;gap:10px}
+.row>*{flex:1;min-width:0}
+.hint{font-size:13px;color:var(--muted);margin:8px 0 0}
+.btn{min-height:46px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.block{width:100%}
+.drop{display:block;border:2px dashed var(--line);border-radius:12px;padding:18px 12px;text-align:center;cursor:pointer;color:var(--muted)}
+.drop.over{border-color:var(--accent);background:var(--tint)}
+.sw{display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer}
+.sw input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.sw.dis{opacity:.45}
+input[type=range]{width:100%;accent-color:var(--accent);height:32px}
+.sum{background:var(--tint);border-radius:12px;padding:12px;margin-top:12px}
+.sum .big{font-size:20px;font-weight:700}
+.sum .sm{color:var(--muted);font-size:14px}
+.pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.pills span{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:13px}
+.pills .warn{color:var(--warn);border-color:var(--warn)}
+.pills .bad{color:var(--bad);border-color:var(--bad)}
+canvas{display:block}
+#ov{width:100%;border-radius:8px;border:1px solid var(--line);cursor:pointer;margin:0 auto}
+#pg{width:100%;max-width:560px;border:1px solid var(--line);border-radius:4px;margin:8px auto 0;box-shadow:0 2px 10px rgba(0,0,0,.18);background:#fff}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted);margin:8px 0}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-2px}
+.nav{display:flex;align-items:center;gap:8px;margin-top:10px}
+.nav .lbl{flex:1;text-align:center;font-size:14px}
+.empty{color:var(--muted);text-align:center;padding:40px 12px}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:10px}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .15s}
+#status{font-size:14px;margin-top:8px;min-height:20px}
+#status.err{color:var(--bad)}
+/* measure modal */
+.modal{position:fixed;inset:0;background:var(--bg);z-index:50;display:flex;flex-direction:column}
+.mbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.mbar b{font-size:16px}
+#mScroll{flex:1;overflow:auto;touch-action:pan-x pan-y pinch-zoom;background:#777;padding:12px}
+#mStage{position:relative;margin:0 auto}
+#mImg{display:block;width:100%;height:auto;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;background:#fff}
+#mSvg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.hd{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;touch-action:none;cursor:grab;z-index:3}
+.hd::before{content:"";position:absolute;inset:11px;border:2px solid #ff3b30;border-radius:50%;background:rgba(255,59,48,.12)}
+.hd::after{content:"";position:absolute;left:21px;top:21px;width:2px;height:2px;background:#ff3b30}
+.hd span{position:absolute;left:32px;top:-2px;font:700 14px system-ui;color:#ff3b30;text-shadow:0 0 3px #fff,0 0 3px #fff}
+.mpanel{padding:12px 14px;border-top:1px solid var(--line);background:var(--card)}
+#printArea{display:none}
+@media print{
+  html,body{background:#fff!important;margin:0}
+  .app,.modal{display:none!important}
+  #printArea{display:block!important}
+  .pp{width:var(--pw);height:calc(var(--ph) - .01in);overflow:hidden;break-after:page;page-break-after:always}
+  .pp:last-child{break-after:auto;page-break-after:auto}
+  .pp img{width:100%;height:100%;display:block}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div>
+      <h1>Tile Printer</h1>
+      <p class="sub">Scale a big image and split it into printable pages.</p>
+    </div>
+    <div class="seg small" data-seg="unit">
+      <button data-v="in">inches</button><button data-v="cm">cm</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="controls">
+
+      <div class="card">
+        <h2>1 · Image</h2>
+        <label class="drop" id="drop">
+          <input type="file" id="file" accept="image/*" hidden>
+          <span id="dropText">Tap to choose an image (or drop one here)</span>
+        </label>
+        <div id="imgInfo" hidden>
+          <label class="f" for="dpi">Native DPI of the image <span id="dpiNote"></span></label>
+          <input type="number" id="dpi" min="1" step="1" inputmode="decimal">
+          <p class="hint" id="nativeSize"></p>
+        </div>
+      </div>
+
+      <div class="card" id="sizeCard">
+        <h2>2 · Finished size</h2>
+        <div class="seg" id="modeTabs">
+          <button data-mode="size">Width / height</button>
+          <button data-mode="pages">By pages</button>
+          <button data-mode="scale">Scale %</button>
+        </div>
+
+        <div data-pane="size">
+          <div class="row">
+            <div><label class="f" for="wIn">Width (<span class="u">in</span>)</label><input type="number" id="wIn" min="0" step="any" inputmode="decimal"></div>
+            <div><label class="f" for="hIn">Height (<span class="u">in</span>)</label><input type="number" id="hIn" min="0" step="any" inputmode="decimal"></div>
+          </div>
+          <p class="hint">Change either one. The other follows, so the image is never stretched.</p>
+        </div>
+        <div data-pane="pages" hidden>
+          <div class="row">
+            <div><label class="f" for="pc">Pages across</label><input type="number" id="pc" min="1" max="30" step="1" inputmode="numeric"></div>
+            <div><label class="f" for="pr">Pages down</label><input type="number" id="pr" min="1" max="30" step="1" inputmode="numeric"></div>
+          </div>
+          <p class="hint">The image is scaled up as large as it can go inside that grid, keeping its proportions.</p>
+        </div>
+        <div data-pane="scale" hidden>
+          <label class="f" for="pct">Scale (% of native size)</label>
+          <input type="number" id="pct" min="1" step="any" inputmode="decimal">
+          <p class="hint">100% prints at the size set by the image's DPI.</p>
+        </div>
+
+        <button class="btn block" id="measureBtn" style="margin-top:12px" disabled>Set size from a measurement…</button>
+
+        <div class="sum" id="sum"><div class="sm">Choose an image to begin.</div></div>
+      </div>
+
+      <div class="card">
+        <h2>3 · Pages &amp; overlap</h2>
+        <div class="row">
+          <div><label class="f" for="paper">Paper</label>
+            <select id="paper"><option value="letter">Letter 8.5 × 11 in</option><option value="a4">A4 210 × 297 mm</option></select></div>
+          <div><label class="f" for="margin">Unprintable margin (<span class="u">in</span>)</label>
+            <input type="number" id="margin" min="0" max="2" step="any" inputmode="decimal"></div>
+        </div>
+        <label class="f">Orientation</label>
+        <div class="seg" data-seg="orient">
+          <button data-v="auto">Auto</button><button data-v="portrait">Portrait</button><button data-v="landscape">Landscape</button>
+        </div>
+        <label class="f">Overlap between pages</label>
+        <div class="seg" data-seg="overlap">
+          <button data-v="0">None (butt)</button><button data-v="0.25">¼ in</button><button data-v="0.5">½ in</button>
+        </div>
+        <p class="hint">Auto picks whichever orientation needs fewer pages.</p>
+      </div>
+
+      <div class="card">
+        <h2>4 · Guides</h2>
+        <label class="sw"><input type="checkbox" data-chk="cut"><span>Dotted cut lines (where pages join)</span></label>
+        <div id="opWrap">
+          <label class="f" for="op">Cut line opacity: <b id="opVal"></b></label>
+          <input type="range" id="op" min="10" max="100" step="5">
+        </div>
+        <label class="sw" id="guidesRow"><input type="checkbox" data-chk="guides"><span>Overlap alignment guides (dash-dot)</span></label>
+        <label class="sw"><input type="checkbox" data-chk="marks"><span>Registration marks</span></label>
+        <label class="sw"><input type="checkbox" data-chk="labels"><span>Page labels (e.g. “5 / 12 · R2 C1”)</span></label>
+        <label class="sw"><input type="checkbox" data-chk="map"><span>Assembly map page with scale-check ruler</span></label>
+        <p class="hint">Labels sit in the corner of the image area, since printers can't print inside the margin. Turn them off if your design has detail there.</p>
+      </div>
+
+      <div class="card">
+        <h2>5 · Export</h2>
+        <div class="row">
+          <div><label class="f" for="ppi">Resolution</label>
+            <select id="ppi"><option value="150">150 DPI (small file)</option><option value="200">200 DPI</option><option value="300">300 DPI (recommended)</option><option value="400">400 DPI (max for iPad)</option></select></div>
+          <div><label class="f" for="fmt">Quality</label>
+            <select id="fmt"><option value="jpeg">High (JPEG)</option><option value="png">Lossless (PNG)</option></select></div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary" id="pdfBtn" disabled>Download PDF</button>
+          <button class="btn" id="printBtn" disabled>Print…</button>
+        </div>
+        <div class="bar" id="bar" hidden><i id="barI"></i></div>
+        <div id="status"></div>
+        <p class="hint">When printing, choose <b>Actual Size / 100%</b> and turn off “Fit to page”. The ruler on the map page lets you check.</p>
+      </div>
+    </div>
+
+    <div class="preview card">
+      <h2>Preview</h2>
+      <div id="pvEmpty" class="empty">Your page layout will appear here.</div>
+      <div id="pvBody" hidden>
+        <div id="ovWrap"><canvas id="ov"></canvas></div>
+        <div class="legend">
+          <span><i style="background:rgba(47,111,237,.35)"></i>page</span>
+          <span><i style="background:rgba(255,160,0,.5)"></i>overlap</span>
+          <span>Tap a page to inspect it</span>
+        </div>
+        <div class="nav">
+          <button class="btn" id="prev">‹</button>
+          <div class="lbl" id="navLbl"></div>
+          <button class="btn" id="next">›</button>
+        </div>
+        <canvas id="pg"></canvas>
+        <p class="hint">Grey band = the unprintable margin.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="measure" hidden>
+  <div class="mbar"><b>Set size from a measurement</b><button class="btn" id="mClose">Close</button></div>
+  <div class="mpanel" style="border-top:0;border-bottom:1px solid var(--line)">
+    <div style="font-size:14px">Tap two points on the image that are a known real distance apart. Drag the red markers to fine-tune, and zoom in for accuracy.</div>
+    <div class="seg small" id="mZoom" style="margin-top:8px">
+      <button data-z="1" class="on">Fit</button><button data-z="2">2×</button><button data-z="4">4×</button><button data-z="8">8×</button>
+    </div>
+  </div>
+  <div id="mScroll">
+    <div id="mStage">
+      <img id="mImg" alt="" draggable="false">
+      <svg id="mSvg" viewBox="0 0 1 1" preserveAspectRatio="none"><line id="mLine" stroke="#ff3b30" stroke-width="2" vector-effect="non-scaling-stroke" hidden/></svg>
+      <div class="hd" id="h0" hidden><span>A</span></div>
+      <div class="hd" id="h1" hidden><span>B</span></div>
+    </div>
+  </div>
+  <div class="mpanel">
+    <div id="mRead" style="font-size:14px;margin-bottom:8px">Tap the image to place point A.</div>
+    <div class="row">
+      <div><label class="f" for="mDist" style="margin-top:0">Real distance between A and B</label><input type="number" id="mDist" min="0" step="any" inputmode="decimal"></div>
+      <div style="max-width:110px"><label class="f" for="mUnit" style="margin-top:0">Unit</label><select id="mUnit"><option value="in">in</option><option value="cm">cm</option><option value="mm">mm</option></select></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="mReset">Reset points</button>
+      <button class="btn primary" id="mApply" disabled>Scale image to fit</button>
+    </div>
+  </div>
+</div>
+
+<div id="printArea"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<script>
+"use strict";
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const PAPERS={letter:[8.5,11],a4:[210/25.4,297/25.4]};
+const KEYS=['unit','paper','margin','orient','overlap','cut','cutOpacity','marks','labels','guides','map','ppi','fmt'];
+const S={img:null,url:null,thumb:null,nw:0,nh:0,name:'image',dpi:300,
+  unit:'in',mode:'size',widthIn:12,scalePct:100,pc:3,pr:3,
+  paper:'letter',margin:0.25,orient:'auto',overlap:0,
+  cut:true,cutOpacity:0.7,marks:true,labels:true,guides:true,map:true,ppi:300,fmt:'jpeg',sel:0};
+try{const o=JSON.parse(localStorage.getItem('tileprinter.v1')||'{}');KEYS.forEach(k=>{if(k in o)S[k]=o[k]})}catch(e){}
+const save=()=>{try{localStorage.setItem('tileprinter.v1',JSON.stringify(Object.fromEntries(KEYS.map(k=>[k,S[k]]))))}catch(e){}};
+
+let L=null, busy=false;
+const toU=v=>S.unit==='in'?v:v*2.54;
+const fromU=v=>S.unit==='in'?v:v/2.54;
+const r2=v=>Math.round(v*100)/100;
+const f2=v=>(Math.round(v*100)/100).toFixed(2);
+
+/* ---------- high-quality scaled draw (progressive halving) ---------- */
+function drawHQ(ctx,src,sx,sy,sw,sh,dx,dy,dw,dh){
+  let s=src,cx=sx,cy=sy,cw=sw,ch=sh;
+  dw=Math.max(1,dw);dh=Math.max(1,dh);
+  while(cw/dw>2||ch/dh>2){
+    let nw=Math.max(Math.ceil(dw),Math.ceil(cw/2)), nh=Math.max(Math.ceil(dh),Math.ceil(ch/2));
+    const area=nw*nh;
+    if(area>12e6){const k=Math.sqrt(12e6/area);nw=Math.max(Math.ceil(dw),Math.floor(nw*k));nh=Math.max(Math.ceil(dh),Math.floor(nh*k))}
+    if(nw>=cw&&nh>=ch)break;
+    const t=document.createElement('canvas');t.width=nw;t.height=nh;
+    const tc=t.getContext('2d');tc.imageSmoothingEnabled=true;tc.imageSmoothingQuality='high';
+    tc.drawImage(s,cx,cy,cw,ch,0,0,nw,nh);
+    s=t;cx=0;cy=0;cw=nw;ch=nh;
+  }
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  ctx.drawImage(s,cx,cy,cw,ch,dx,dy,dw,dh);
+}
+
+/* ---------- layout maths ---------- */
+function compute(){
+  L=null;
+  if(!S.img)return;
+  const asp=S.nw/S.nh,o=S.overlap,m=S.margin,eps=1e-6;
+  const [a,b]=PAPERS[S.paper];
+  const oris=S.orient==='auto'?['p','l']:[S.orient==='landscape'?'l':'p'];
+  let best=null;
+  for(const ori of oris){
+    const pageW=ori==='p'?a:b,pageH=ori==='p'?b:a;
+    const pw=pageW-2*m,ph=pageH-2*m;
+    if(pw<=o+0.05||ph<=o+0.05)continue;
+    let W;
+    if(S.mode==='pages'){
+      const cw=S.pc*pw-(S.pc-1)*o,ch=S.pr*ph-(S.pr-1)*o;
+      W=Math.min(cw,ch*asp);
+    }else if(S.mode==='scale'){W=S.nw/S.dpi*S.scalePct/100}
+    else W=S.widthIn;
+    if(!(W>0))continue;
+    const H=W/asp;
+    const n=(len,p)=>len<=p+eps?1:Math.ceil((len-p)/(p-o)-eps)+1;
+    const cols=n(W,pw),rows=n(H,ph);
+    const c={ori,pageW,pageH,pw,ph,W,H,cols,rows,count:cols*rows,m,o,sx:pw-o,sy:ph-o};
+    if(!best)best=c;
+    else if(S.mode==='pages'){if(c.W>best.W+1e-6||(Math.abs(c.W-best.W)<1e-6&&c.count<best.count))best=c}
+    else if(c.count<best.count)best=c;
+  }
+  if(!best)return;
+  best.tiles=[];
+  for(let r=0;r<best.rows;r++)for(let c=0;c<best.cols;c++){
+    const x0=c*best.sx,y0=r*best.sy;
+    best.tiles.push({c,r,n:r*best.cols+c+1,x0,y0,x1:Math.min(x0+best.pw,best.W),y1:Math.min(y0+best.ph,best.H)});
+  }
+  L=best;
+}
+
+/* ---------- drawing a page ---------- */
+function renderTile(ctx,t,ppi,preview){
+  const {pageW,pageH,m,o,W,cols,rows,sx,sy,count}=L;
+  const cv=ctx.canvas;
+  ctx.save();
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);
+  const dx=Math.round(m*ppi),dy=Math.round(m*ppi);
+  const dw=Math.max(1,Math.round((t.x1-t.x0)*ppi)),dh=Math.max(1,Math.round((t.y1-t.y0)*ppi));
+  const k=S.nw/W;
+  const sxp=t.x0*k,syp=t.y0*k;
+  const swp=Math.min(dw/ppi*k,S.nw-sxp),shp=Math.min(dh/ppi*k,S.nh-syp);
+  drawHQ(ctx,S.img,sxp,syp,swp,shp,dx,dy,dw,dh);
+
+  ctx.beginPath();ctx.rect(dx,dy,dw,dh);ctx.clip();
+  const px=gx=>dx+(gx-t.x0)*ppi, py=gy=>dy+(gy-t.y0)*ppi;
+
+  if(S.cut){
+    const lw=Math.max(1,Math.round(0.012*ppi));
+    ctx.lineWidth=lw;ctx.strokeStyle='rgba(0,0,0,'+S.cutOpacity+')';
+    ctx.setLineDash([0.07*ppi,0.05*ppi]);ctx.lineCap='butt';
+    ctx.beginPath();
+    if(t.c>0){ctx.moveTo(dx+lw/2,dy);ctx.lineTo(dx+lw/2,dy+dh)}
+    if(t.c<cols-1){ctx.moveTo(dx+dw-lw/2,dy);ctx.lineTo(dx+dw-lw/2,dy+dh)}
+    if(t.r>0){ctx.moveTo(dx,dy+lw/2);ctx.lineTo(dx+dw,dy+lw/2)}
+    if(t.r<rows-1){ctx.moveTo(dx,dy+dh-lw/2);ctx.lineTo(dx+dw,dy+dh-lw/2)}
+    ctx.stroke();
+  }
+  if(S.guides&&o>0){
+    const lw=Math.max(1,Math.round(0.008*ppi));
+    ctx.lineWidth=lw;ctx.strokeStyle='rgba(0,0,0,'+Math.min(1,S.cutOpacity)+')';
+    ctx.setLineDash([0.18*ppi,0.04*ppi,0.03*ppi,0.04*ppi]);
+    ctx.beginPath();
+    if(t.c<cols-1){const x=px((t.c+1)*sx);ctx.moveTo(x,dy);ctx.lineTo(x,dy+dh)}
+    if(t.c>0){const x=px(t.c*sx+o);ctx.moveTo(x,dy);ctx.lineTo(x,dy+dh)}
+    if(t.r<rows-1){const y=py((t.r+1)*sy);ctx.moveTo(dx,y);ctx.lineTo(dx+dw,y)}
+    if(t.r>0){const y=py(t.r*sy+o);ctx.moveTo(dx,y);ctx.lineTo(dx+dw,y)}
+    ctx.stroke();
+  }
+  if(S.marks&&(t.x1-t.x0)>0.5&&(t.y1-t.y0)>0.5){
+    const inset=0.17,arm=0.11,rad=0.045;
+    const xl=t.c>0?t.c*sx+o/2:t.x0+inset, xr=t.c<cols-1?(t.c+1)*sx+o/2:t.x1-inset;
+    const yt=t.r>0?t.r*sy+o/2:t.y0+inset, yb=t.r<rows-1?(t.r+1)*sy+o/2:t.y1-inset;
+    ctx.setLineDash([]);ctx.lineWidth=Math.max(1,Math.round(0.007*ppi));
+    ctx.strokeStyle='rgba(0,0,0,.9)';
+    for(const gx of [xl,xr])for(const gy of [yt,yb]){
+      const x=px(gx),y=py(gy);
+      ctx.beginPath();ctx.arc(x,y,rad*ppi,0,Math.PI*2);
+      ctx.moveTo(x-arm*ppi,y);ctx.lineTo(x+arm*ppi,y);
+      ctx.moveTo(x,y-arm*ppi);ctx.lineTo(x,y+arm*ppi);
+      ctx.stroke();
+    }
+  }
+  if(S.labels){
+    const fp=Math.max(8,Math.round(0.11*ppi));
+    ctx.font='600 '+fp+'px -apple-system,Helvetica,Arial,sans-serif';
+    ctx.textBaseline='middle';ctx.textAlign='left';
+    const txt=t.n+' / '+count+'  ·  R'+(t.r+1)+' C'+(t.c+1);
+    const tw=ctx.measureText(txt).width,pad=0.035*ppi;
+    const bx=dx+0.07*ppi,by=dy+0.07*ppi,bw=tw+pad*2,bh=fp+pad*1.4;
+    ctx.fillStyle='rgba(255,255,255,.88)';ctx.fillRect(bx,by,bw,bh);
+    ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=1;ctx.setLineDash([]);ctx.strokeRect(bx,by,bw,bh);
+    ctx.fillStyle='#000';ctx.fillText(txt,bx+pad,by+bh/2+1);
+  }
+  ctx.restore();
+  if(preview){
+    ctx.save();ctx.setTransform(1,0,0,1,0,0);
+    ctx.fillStyle='rgba(120,120,120,.22)';
+    const mp=Math.round(m*ppi);
+    ctx.fillRect(0,0,cv.width,mp);ctx.fillRect(0,cv.height-mp,cv.width,mp);
+    ctx.fillRect(0,mp,mp,cv.height-2*mp);ctx.fillRect(cv.width-mp,mp,mp,cv.height-2*mp);
+    ctx.restore();
+  }
+}
+
+/* layout diagram (used on screen and on the map page) */
+function paintLayout(ctx,ox,oy,s,opt){
+  const {W,H,cols,rows,pw,sx,sy,o,tiles}=L;
+  drawHQ(ctx,opt.src,0,0,opt.sw,opt.sh,ox,oy,W*s,H*s);
+  ctx.save();
+  if(o>0){
+    ctx.fillStyle='rgba(255,160,0,.32)';
+    for(let c=0;c<cols-1;c++)ctx.fillRect(ox+(c+1)*sx*s,oy,o*s,H*s);
+    for(let r=0;r<rows-1;r++)ctx.fillRect(ox,oy+(r+1)*sy*s,W*s,o*s);
+  }
+  for(const t of tiles){
+    ctx.fillStyle=(t.c+t.r)%2?'rgba(47,111,237,.10)':'rgba(237,60,100,.10)';
+    ctx.fillRect(ox+t.x0*s,oy+t.y0*s,(t.x1-t.x0)*s,(t.y1-t.y0)*s);
+    ctx.strokeStyle='rgba(30,60,170,.85)';ctx.lineWidth=opt.lw;
+    ctx.strokeRect(ox+t.x0*s,oy+t.y0*s,(t.x1-t.x0)*s,(t.y1-t.y0)*s);
+  }
+  if(opt.sel>=0){
+    const t=tiles[opt.sel];
+    ctx.fillStyle='rgba(47,111,237,.20)';
+    ctx.fillRect(ox+t.x0*s,oy+t.y0*s,(t.x1-t.x0)*s,(t.y1-t.y0)*s);
+    ctx.strokeStyle='#ff3b30';ctx.lineWidth=opt.lw*2.2;
+    ctx.strokeRect(ox+t.x0*s,oy+t.y0*s,(t.x1-t.x0)*s,(t.y1-t.y0)*s);
+  }
+  ctx.font='700 '+opt.font+'px -apple-system,Helvetica,Arial,sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  for(const t of tiles){
+    if((t.x1-t.x0)*s<opt.font*1.4||(t.y1-t.y0)*s<opt.font*1.4)continue;
+    const cx=ox+(t.x0+t.x1)/2*s,cy=oy+(t.y0+t.y1)/2*s;
+    ctx.lineWidth=Math.max(3,opt.font*.25);ctx.strokeStyle='rgba(255,255,255,.92)';ctx.strokeText(String(t.n),cx,cy);
+    ctx.fillStyle='#111';ctx.fillText(String(t.n),cx,cy);
+  }
+  ctx.restore();
+}
+
+function renderMap(ctx,ppi){
+  const cv=ctx.canvas,{pageW,pageH,m,W,H,cols,rows,count,o}=L;
+  ctx.save();ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#000';ctx.textBaseline='top';ctx.textAlign='left';ctx.setLineDash([]);
+  const x0=(m+0.1)*ppi,sans='-apple-system,Helvetica,Arial,sans-serif';
+  const nm=S.name.length>40?S.name.slice(0,38)+'…':S.name;
+  ctx.font='700 '+0.2*ppi+'px '+sans;ctx.fillText('Assembly map — '+nm,x0,(m+0.05)*ppi);
+  ctx.font='400 '+0.13*ppi+'px '+sans;
+  const ovTxt=o===0?'no overlap (butt joints)':(o===0.25?'¼ in':'½ in')+' overlap';
+  ctx.fillText(f2(W)+' × '+f2(H)+' in  ('+f2(W*2.54)+' × '+f2(H*2.54)+' cm)  ·  '+cols+' × '+rows+' = '+count+' pages  ·  '+ovTxt,x0,(m+0.33)*ppi);
+  ctx.fillStyle='#555';
+  ctx.fillText('Numbers show page order, left to right, then top to bottom. Orange = overlap.',x0,(m+0.52)*ppi);
+  const aw=pageW-2*m-0.2,ah=pageH-2*m-0.8-1.0;
+  const f=Math.min(aw/W,ah/H);
+  const ox=x0+(aw-W*f)*ppi/2,oy=(m+0.8)*ppi;
+  paintLayout(ctx,ox,oy,f*ppi,{src:S.img,sw:S.nw,sh:S.nh,font:0.2*ppi,lw:Math.max(1,0.012*ppi),sel:-1});
+  // scale-check ruler
+  const cm=S.unit==='cm',len=cm?10/2.54:4,unitIn=cm?1/2.54:1,ticks=cm?10:4;
+  const ry=(pageH-m-0.55)*ppi;
+  ctx.strokeStyle='#000';ctx.fillStyle='#000';ctx.lineWidth=Math.max(1,0.012*ppi);ctx.setLineDash([]);
+  ctx.beginPath();ctx.moveTo(x0,ry);ctx.lineTo(x0+len*ppi,ry);ctx.stroke();
+  ctx.font='400 '+0.1*ppi+'px '+sans;ctx.textAlign='center';
+  for(let i=0;i<=ticks;i++){
+    const x=x0+i*unitIn*ppi;
+    ctx.beginPath();ctx.moveTo(x,ry-0.1*ppi);ctx.lineTo(x,ry+0.1*ppi);ctx.stroke();
+    ctx.fillText(String(i),x,ry+0.13*ppi);
+  }
+  ctx.textAlign='left';ctx.font='400 '+0.11*ppi+'px '+sans;
+  ctx.fillText('Scale check: this bar should measure exactly '+(cm?'10 cm':'4 in')+'. If it does not, set printing to Actual Size / 100%.',x0,ry-0.3*ppi);
+  ctx.restore();
+}
+
+/* ---------- on-screen preview ---------- */
+function drawOverview(){
+  const cv=$('#ov'),wrap=$('#ovWrap');
+  const cssW=Math.max(200,wrap.clientWidth),maxH=Math.min(560,innerHeight*0.6);
+  const s=Math.min(cssW/L.W,maxH/L.H);
+  const cw=L.W*s,ch=L.H*s,dpr=Math.min(devicePixelRatio||1,2);
+  cv.style.width=cw+'px';cv.style.height=ch+'px';
+  cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);
+  const ctx=cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,cw,ch);
+  paintLayout(ctx,0,0,s,{src:S.thumb,sw:S.thumb.width,sh:S.thumb.height,font:Math.max(11,Math.min(22,cw/(L.cols*3.2))),lw:1.2,sel:S.sel});
+}
+function drawPage(){
+  const t=L.tiles[S.sel],ppi=96,cv=$('#pg');
+  cv.width=Math.round(L.pageW*ppi);cv.height=Math.round(L.pageH*ppi);
+  renderTile(cv.getContext('2d'),t,ppi,true);
+  $('#navLbl').textContent='Page '+t.n+' of '+L.count+'  ·  row '+(t.r+1)+', col '+(t.c+1);
+}
+
+/* ---------- UI sync ---------- */
+function ovLabel(){return S.overlap===0?'none (butt)':S.overlap===0.25?'¼ in':'½ in'}
+function renderSummary(){
+  const el=$('#sum');
+  if(!S.img){el.innerHTML='<div class="sm">Choose an image to begin.</div>';return}
+  if(!L){el.innerHTML='<div class="sm" style="color:var(--bad)">The margin is too large for this paper and overlap. Reduce the margin.</div>';return}
+  const dpi=S.nw/L.W;
+  const cls=dpi<100?'bad':dpi<150?'warn':'';
+  const big=S.unit==='in'?f2(L.W)+' × '+f2(L.H)+' in':f2(L.W*2.54)+' × '+f2(L.H*2.54)+' cm';
+  const sm=S.unit==='in'?f2(L.W*2.54)+' × '+f2(L.H*2.54)+' cm':f2(L.W)+' × '+f2(L.H)+' in';
+  el.innerHTML='<div class="big">'+big+'</div><div class="sm">'+sm+'</div><div class="pills"><span>'+L.cols+' × '+L.rows+' = '+L.count+' pages</span><span>'+(L.ori==='p'?'Portrait':'Landscape')+'</span><span class="'+cls+'">~'+Math.round(dpi)+' DPI effective</span>'+(L.count>60?'<span class="warn">Lots of pages</span>':'')+'</div>'
+   +(dpi<150?'<div class="hint">The image has fewer pixels than this size needs, so it may look soft when printed.</div>':'');
+}
+function syncFields(skip){
+  const set=(el,v)=>{if(el!==skip&&document.activeElement!==el)el.value=v};
+  $$('.u').forEach(e=>e.textContent=S.unit);
+  $$('[data-seg]').forEach(g=>{const k=g.dataset.seg;g.querySelectorAll('button').forEach(b=>b.classList.toggle('on',String(S[k])===b.dataset.v||(typeof S[k]==='number'&&parseFloat(b.dataset.v)===S[k])))});
+  $$('[data-mode]').forEach(b=>b.classList.toggle('on',b.dataset.mode===S.mode));
+  $$('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==S.mode);
+  $$('[data-chk]').forEach(c=>c.checked=!!S[c.dataset.chk]);
+  set($('#margin'),r2(toU(S.margin)));
+  set($('#paper'),S.paper);set($('#ppi'),S.ppi);set($('#fmt'),S.fmt);
+  set($('#op'),Math.round(S.cutOpacity*100));$('#opVal').textContent=Math.round(S.cutOpacity*100)+'%';
+  $('#opWrap').hidden=!S.cut;
+  const gr=$('#guidesRow');gr.classList.toggle('dis',S.overlap===0);gr.querySelector('input').disabled=S.overlap===0;
+  if(S.img){
+    set($('#dpi'),S.dpi);
+    const W=L?L.W:S.widthIn;
+    set($('#wIn'),r2(toU(W)));set($('#hIn'),r2(toU(W*S.nh/S.nw)));
+    set($('#pc'),S.pc);set($('#pr'),S.pr);set($('#pct'),Math.round(S.scalePct*10)/10);
+    const nwI=S.nw/S.dpi,nhI=S.nh/S.dpi;
+    $('#nativeSize').textContent=S.nw+' × '+S.nh+' px  =  '+f2(toU(nwI))+' × '+f2(toU(nhI))+' '+S.unit+' at '+S.dpi+' DPI';
+  }
+  const ok=!!L&&!busy;
+  $('#pdfBtn').disabled=!ok;$('#printBtn').disabled=!ok;$('#measureBtn').disabled=!S.img;
+}
+let rafId=0,pendSkip=null;
+function sched(skip){pendSkip=skip||null;if(rafId)return;rafId=requestAnimationFrame(()=>{rafId=0;update(pendSkip)})}
+function update(skip){
+  compute();syncFields(skip);renderSummary();
+  $('#pvEmpty').hidden=!!L;$('#pvBody').hidden=!L;
+  if(L){if(S.sel>=L.count)S.sel=0;drawOverview();drawPage()}
+  save();
+}
+
+/* ---------- loading an image ---------- */
+function readDpi(buf){
+  try{
+    const v=new DataView(buf);
+    if(v.getUint32(0)===0x89504E47){
+      let p=8;
+      while(p+12<=v.byteLength){
+        const len=v.getUint32(p),type=String.fromCharCode(v.getUint8(p+4),v.getUint8(p+5),v.getUint8(p+6),v.getUint8(p+7));
+        if(type==='pHYs'){const x=v.getUint32(p+8),u=v.getUint8(p+16);return(u===1&&x>0)?Math.round(x*0.0254):null}
+        if(type==='IDAT')return null;
+        p+=12+len;
+      }
+    }else if(v.getUint16(0)===0xFFD8){
+      let p=2;
+      while(p+4<v.byteLength){
+        if(v.getUint8(p)!==0xFF)break;
+        const mk=v.getUint8(p+1),len=v.getUint16(p+2);
+        if(mk===0xE0&&len>=16&&v.getUint32(p+4)===0x4A464946){
+          const u=v.getUint8(p+11),x=v.getUint16(p+12);
+          if(u===1&&x>1)return x;if(u===2&&x>1)return Math.round(x*2.54);return null;
+        }
+        if(mk===0xDA)break;
+        p+=2+len;
+      }
+    }
+  }catch(e){}
+  return null;
+}
+function status(msg,err){const e=$('#status');e.textContent=msg||'';e.classList.toggle('err',!!err)}
+async function loadFile(file){
+  if(!file)return;
+  if(!file.type.startsWith('image/')){status('That file is not an image.',true);return}
+  status('Loading image…');
+  try{
+    const buf=await file.arrayBuffer();
+    const dpi=readDpi(buf);
+    if(S.url)URL.revokeObjectURL(S.url);
+    const url=URL.createObjectURL(new Blob([buf],{type:file.type}));
+    const img=new Image();
+    await new Promise((res,rej)=>{img.onload=res;img.onerror=()=>rej(new Error('decode'));img.src=url});
+    S.img=img;S.url=url;S.nw=img.naturalWidth;S.nh=img.naturalHeight;
+    S.name=(file.name||'image').replace(/\.[^.]+$/,'');
+    S.dpi=dpi||300;
+    $('#dpiNote').textContent=dpi?'(read from the file)':'(assumed, set to your canvas DPI)';
+    const k=Math.min(1,1600/Math.max(S.nw,S.nh));
+    const c=document.createElement('canvas');c.width=Math.max(1,Math.round(S.nw*k));c.height=Math.max(1,Math.round(S.nh*k));
+    const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+    drawHQ(x,img,0,0,S.nw,S.nh,0,0,c.width,c.height);
+    S.thumb=c;
+    S.mode='size';S.widthIn=S.nw/S.dpi;S.sel=0;
+    $('#dropText').textContent=file.name+'  ·  tap to change';
+    $('#imgInfo').hidden=false;
+    status('');update();
+  }catch(e){status('Could not open that image.',true)}
+}
+$('#file').addEventListener('change',e=>loadFile(e.target.files[0]));
+const drop=$('#drop');
+['dragenter','dragover'].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over')}));
+document.addEventListener('drop',e=>{const f=e.dataTransfer&&e.dataTransfer.files[0];if(f)loadFile(f)});
+
+/* ---------- control wiring ---------- */
+$$('[data-seg]').forEach(g=>g.addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  const k=g.dataset.seg;S[k]=(k==='overlap')?parseFloat(b.dataset.v):b.dataset.v;
+  S.sel=0;update();
+}));
+$$('[data-chk]').forEach(c=>c.addEventListener('change',()=>{S[c.dataset.chk]=c.checked;update()}));
+$$('[data-mode]').forEach(b=>b.addEventListener('click',()=>{
+  const nm=b.dataset.mode;
+  if(S.img&&L){
+    if(nm==='size')S.widthIn=L.W;
+    if(nm==='scale')S.scalePct=Math.round(L.W/(S.nw/S.dpi)*1000)/10;
+    if(nm==='pages'){S.pc=L.cols;S.pr=L.rows}
+  }
+  S.mode=nm;S.sel=0;update();
+}));
+const num=el=>{const v=parseFloat(el.value);return v>0?v:null};
+$('#wIn').addEventListener('input',e=>{const v=num(e.target);if(v&&S.img){S.widthIn=fromU(v);sched(e.target)}});
+$('#hIn').addEventListener('input',e=>{const v=num(e.target);if(v&&S.img){S.widthIn=fromU(v)*S.nw/S.nh;sched(e.target)}});
+$('#pc').addEventListener('input',e=>{const v=num(e.target);if(v){S.pc=Math.min(30,Math.round(v));sched(e.target)}});
+$('#pr').addEventListener('input',e=>{const v=num(e.target);if(v){S.pr=Math.min(30,Math.round(v));sched(e.target)}});
+$('#pct').addEventListener('input',e=>{const v=num(e.target);if(v){S.scalePct=v;sched(e.target)}});
+$('#dpi').addEventListener('input',e=>{const v=num(e.target);if(v){S.dpi=v;sched(e.target)}});
+$('#margin').addEventListener('input',e=>{const v=parseFloat(e.target.value);if(v>=0){S.margin=Math.min(2,fromU(v));sched(e.target)}});
+$('#paper').addEventListener('change',e=>{S.paper=e.target.value;update()});
+$('#ppi').addEventListener('change',e=>{S.ppi=parseInt(e.target.value,10);save()});
+$('#fmt').addEventListener('change',e=>{S.fmt=e.target.value;save()});
+$('#op').addEventListener('input',e=>{S.cutOpacity=parseInt(e.target.value,10)/100;$('#opVal').textContent=e.target.value+'%';sched(e.target)});
+$('#prev').addEventListener('click',()=>{if(!L)return;S.sel=(S.sel-1+L.count)%L.count;drawOverview();drawPage()});
+$('#next').addEventListener('click',()=>{if(!L)return;S.sel=(S.sel+1)%L.count;drawOverview();drawPage()});
+$('#ov').addEventListener('click',e=>{
+  if(!L)return;
+  const r=e.target.getBoundingClientRect(),s=r.width/L.W;
+  const gx=(e.clientX-r.left)/s,gy=(e.clientY-r.top)/s;
+  const c=Math.min(L.cols-1,Math.max(0,Math.floor(gx/L.sx+1e-9)));
+  const rr=Math.min(L.rows-1,Math.max(0,Math.floor(gy/L.sy+1e-9)));
+  S.sel=rr*L.cols+c;drawOverview();drawPage();
+});
+let rt=0;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{if(L)drawOverview();if(!$('#measure').hidden)layoutStage()},120)});
+
+/* ---------- measurement tool ---------- */
+const M={pts:[],zoom:1};
+function layoutStage(){
+  const sc=$('#mScroll'),aw=sc.clientWidth-24,ah=sc.clientHeight-24;
+  const fit=Math.max(100,Math.min(aw,ah*S.nw/S.nh));
+  $('#mStage').style.width=(fit*M.zoom)+'px';
+}
+function curW(){return L?L.W:S.widthIn}
+function measuredIn(){
+  const a=M.pts[0],b=M.pts[1];
+  const px=Math.hypot((b.x-a.x)*S.nw,(b.y-a.y)*S.nh);
+  return {px,inch:px/S.nw*curW()};
+}
+function mUpdate(){
+  [0,1].forEach(i=>{
+    const h=$('#h'+i),p=M.pts[i];
+    h.hidden=!p;if(p){h.style.left=p.x*100+'%';h.style.top=p.y*100+'%'}
+  });
+  const ln=$('#mLine');
+  if(M.pts.length===2){
+    ln.hidden=false;
+    ln.setAttribute('x1',M.pts[0].x);ln.setAttribute('y1',M.pts[0].y);ln.setAttribute('x2',M.pts[1].x);ln.setAttribute('y2',M.pts[1].y);
+    const m=measuredIn();
+    $('#mRead').textContent='A to B is '+Math.round(m.px)+' px, currently about '+f2(toU(m.inch))+' '+S.unit+' at the current size. Enter what it should be.';
+  }else{
+    ln.hidden=true;
+    $('#mRead').textContent=M.pts.length===0?'Tap the image to place point A.':'Tap the image to place point B.';
+  }
+  const v=parseFloat($('#mDist').value);
+  $('#mApply').disabled=!(M.pts.length===2&&v>0&&measuredIn().px>1);
+}
+function openMeasure(){
+  if(!S.img)return;
+  M.pts=[];M.zoom=1;
+  $$('#mZoom button').forEach(b=>b.classList.toggle('on',b.dataset.z==='1'));
+  $('#mImg').src=S.url;$('#mUnit').value=S.unit;$('#mDist').value='';
+  $('#measure').hidden=false;document.body.style.overflow='hidden';
+  layoutStage();mUpdate();
+}
+function closeMeasure(){$('#measure').hidden=true;document.body.style.overflow=''}
+$('#measureBtn').addEventListener('click',openMeasure);
+$('#mClose').addEventListener('click',closeMeasure);
+$('#mReset').addEventListener('click',()=>{M.pts=[];mUpdate()});
+$('#mDist').addEventListener('input',mUpdate);
+$('#mZoom').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;M.zoom=parseFloat(b.dataset.z);$$('#mZoom button').forEach(x=>x.classList.toggle('on',x===b));layoutStage()});
+const stagePos=e=>{const r=$('#mStage').getBoundingClientRect();return{x:Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)),y:Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))}};
+$('#mImg').addEventListener('click',e=>{
+  const p=stagePos(e);
+  if(M.pts.length<2)M.pts.push(p);
+  else{
+    const r=$('#mStage').getBoundingClientRect();
+    const d=M.pts.map(q=>Math.hypot((q.x-p.x)*r.width,(q.y-p.y)*r.height));
+    M.pts[d[0]<=d[1]?0:1]=p;
+  }
+  mUpdate();
+});
+[0,1].forEach(i=>{
+  const h=$('#h'+i);
+  h.addEventListener('pointerdown',e=>{e.preventDefault();h.setPointerCapture(e.pointerId);h._drag=true});
+  h.addEventListener('pointermove',e=>{if(!h._drag)return;M.pts[i]=stagePos(e);mUpdate()});
+  const end=e=>{h._drag=false;try{h.releasePointerCapture(e.pointerId)}catch(_){}};
+  h.addEventListener('pointerup',end);h.addEventListener('pointercancel',end);
+});
+$('#mApply').addEventListener('click',()=>{
+  const v=parseFloat($('#mDist').value),u=$('#mUnit').value;
+  if(!(v>0)||M.pts.length<2)return;
+  const real=v/(u==='in'?1:u==='cm'?2.54:25.4);
+  const m=measuredIn();
+  S.widthIn=curW()*real/m.inch;
+  S.mode='size';S.sel=0;
+  closeMeasure();update();
+  status('Scaled so A to B measures '+v+' '+u+'. New size: '+f2(toU(S.widthIn))+' × '+f2(toU(S.widthIn*S.nh/S.nw))+' '+S.unit+'.');
+});
+
+/* ---------- export ---------- */
+function progress(i,n,msg){
+  $('#bar').hidden=false;$('#barI').style.width=Math.round(i/n*100)+'%';status(msg)
+}
+function setBusy(b){busy=b;$('#pdfBtn').disabled=b||!L;$('#printBtn').disabled=b||!L}
+async function exportPages(kind){
+  if(!L||busy)return;
+  if(kind==='pdf'&&!(window.jspdf&&window.jspdf.jsPDF)){status('The PDF library did not load (offline?). Use Print instead, or reload when online.',true);return}
+  setBusy(true);status('');
+  const ppi=S.ppi,cw=Math.round(L.pageW*ppi),ch=Math.round(L.pageH*ppi);
+  const cv=document.createElement('canvas');cv.width=cw;cv.height=ch;
+  const ctx=cv.getContext('2d');
+  const jobs=[];
+  if(S.map&&L.count>1)jobs.push({map:true});
+  L.tiles.forEach(t=>jobs.push({t}));
+  const png=S.fmt==='png',mime=png?'image/png':'image/jpeg';
+  const orient=L.ori==='p'?'portrait':'landscape';
+  const pw=L.pageW,ph=L.pageH,total=jobs.length;
+  let doc=null;const urls=[];
+  try{
+    if(kind==='pdf')doc=new window.jspdf.jsPDF({orientation:orient,unit:'in',format:[pw,ph],compress:true});
+    for(let i=0;i<total;i++){
+      progress(i,total,'Rendering page '+(i+1)+' of '+total+'…');
+      await new Promise(r=>setTimeout(r,20));
+      if(jobs[i].map)renderMap(ctx,ppi);else renderTile(ctx,jobs[i].t,ppi,false);
+      if(kind==='pdf'){
+        if(i>0)doc.addPage([pw,ph],orient);
+        doc.addImage(cv.toDataURL(mime,0.95),png?'PNG':'JPEG',0,0,pw,ph,undefined,'FAST');
+      }else{
+        const blob=await new Promise(r=>cv.toBlob(r,mime,0.95));
+        urls.push(URL.createObjectURL(blob));
+      }
+    }
+    progress(total,total,kind==='pdf'?'Building PDF…':'Preparing print…');
+    if(kind==='pdf'){
+      await new Promise(r=>setTimeout(r,20));
+      const blob=doc.output('blob');
+      const nm=(S.name+'-'+f2(toU(L.W)).replace('.00','')+'x'+f2(toU(L.H)).replace('.00','')+S.unit+'-tiles.pdf').replace(/[^\w.\-]+/g,'_');
+      const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nm;document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+      status('Done: '+total+' pages. If nothing downloaded, check your browser downloads.');
+    }else{
+      const area=$('#printArea');
+      area.innerHTML='';
+      area.style.setProperty('--pw',pw+'in');area.style.setProperty('--ph',ph+'in');
+      let st=$('#pageRule');if(!st){st=document.createElement('style');st.id='pageRule';document.head.appendChild(st)}
+      st.textContent='@page{size:'+pw+'in '+ph+'in;margin:0}';
+      const imgs=urls.map(u=>{const d=document.createElement('div');d.className='pp';const im=new Image();im.src=u;d.appendChild(im);area.appendChild(d);return im});
+      await Promise.all(imgs.map(im=>im.decode().catch(()=>{})));
+      status('Opening the print dialog. Choose Actual Size / 100%.');
+      const cleanup=()=>{area.innerHTML='';urls.forEach(u=>URL.revokeObjectURL(u));removeEventListener('afterprint',cleanup)};
+      addEventListener('afterprint',cleanup);
+      window.print();
+    }
+  }catch(e){
+    console.error(e);
+    status('Something went wrong while exporting. Try a lower resolution.',true);
+  }finally{
+    $('#bar').hidden=true;setBusy(false);
+  }
+}
+$('#pdfBtn').addEventListener('click',()=>exportPages('pdf'));
+$('#printBtn').addEventListener('click',()=>exportPages('print'));
+
+update();
+</script>
+</body>
+</html>
