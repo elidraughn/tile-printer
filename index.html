@@ -192,6 +192,7 @@ canvas{display:block}
           <button class="btn primary" id="pdfBtn" disabled>Download PDF</button>
           <button class="btn" id="printBtn" disabled>Print…</button>
         </div>
+        <button class="btn primary block" id="printNow" hidden style="margin-top:10px">Pages ready: open print dialog</button>
         <div class="bar" id="bar" hidden><i id="barI"></i></div>
         <div id="status"></div>
         <p class="hint">When printing, choose <b>Actual Size / 100%</b> and turn off “Fit to page”. The ruler on the map page lets you check.</p>
@@ -277,15 +278,17 @@ function drawHQ(ctx,src,sx,sy,sw,sh,dx,dy,dw,dh){
   while(cw/dw>2||ch/dh>2){
     let nw=Math.max(Math.ceil(dw),Math.ceil(cw/2)), nh=Math.max(Math.ceil(dh),Math.ceil(ch/2));
     const area=nw*nh;
-    if(area>12e6){const k=Math.sqrt(12e6/area);nw=Math.max(Math.ceil(dw),Math.floor(nw*k));nh=Math.max(Math.ceil(dh),Math.floor(nh*k))}
+    if(area>6e6){const k=Math.sqrt(6e6/area);nw=Math.max(Math.ceil(dw),Math.floor(nw*k));nh=Math.max(Math.ceil(dh),Math.floor(nh*k))}
     if(nw>=cw&&nh>=ch)break;
     const t=document.createElement('canvas');t.width=nw;t.height=nh;
     const tc=t.getContext('2d');tc.imageSmoothingEnabled=true;tc.imageSmoothingQuality='high';
     tc.drawImage(s,cx,cy,cw,ch,0,0,nw,nh);
+    if(s!==src){s.width=0;s.height=0}
     s=t;cx=0;cy=0;cw=nw;ch=nh;
   }
   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
   ctx.drawImage(s,cx,cy,cw,ch,dx,dy,dw,dh);
+  if(s!==src){s.width=0;s.height=0}
 }
 
 /* ---------- layout maths ---------- */
@@ -563,6 +566,7 @@ async function loadFile(file){
   if(!file)return;
   if(!file.type.startsWith('image/')){status('That file is not an image.',true);return}
   status('Loading image…');
+  let stage='decode';
   try{
     const buf=await file.arrayBuffer();
     const dpi=readDpi(buf);
@@ -570,6 +574,7 @@ async function loadFile(file){
     const url=URL.createObjectURL(new Blob([buf],{type:file.type}));
     const img=new Image();
     await new Promise((res,rej)=>{img.onload=res;img.onerror=()=>rej(new Error('decode'));img.src=url});
+    stage='prep';
     S.img=img;S.url=url;S.nw=img.naturalWidth;S.nh=img.naturalHeight;
     S.name=(file.name||'image').replace(/\.[^.]+$/,'');
     S.dpi=dpi||300;
@@ -583,7 +588,12 @@ async function loadFile(file){
     $('#dropText').textContent=file.name+'  ·  tap to change';
     $('#imgInfo').hidden=false;
     status('');update();
-  }catch(e){status('Could not open that image.',true)}
+  }catch(e){
+    console.error(e);
+    status(stage==='decode'
+      ?'This browser could not decode that image. It may be too large or in an unsupported format (HEIC, for example). Try exporting it as a PNG or JPEG, or at a smaller pixel size.'
+      :'The image opened, but building the preview failed: '+((e&&e.message)||e),true);
+  }
 }
 $('#file').addEventListener('change',e=>loadFile(e.target.files[0]));
 const drop=$('#drop');
@@ -709,11 +719,15 @@ $('#mApply').addEventListener('click',()=>{
 function progress(i,n,msg){
   $('#bar').hidden=false;$('#barI').style.width=Math.round(i/n*100)+'%';status(msg)
 }
+let printUrls=[];
+$('#printNow').addEventListener('click',()=>window.print());
 function setBusy(b){busy=b;$('#pdfBtn').disabled=b||!L;$('#printBtn').disabled=b||!L}
 async function exportPages(kind){
   if(!L||busy)return;
   if(kind==='pdf'&&!(window.jspdf&&window.jspdf.jsPDF)){status('The PDF library did not load (offline?). Use Print instead, or reload when online.',true);return}
   setBusy(true);status('');
+  $('#printNow').hidden=true;$('#printArea').innerHTML='';
+  printUrls.forEach(u=>URL.revokeObjectURL(u));printUrls=[];
   const ppi=S.ppi,cw=Math.round(L.pageW*ppi),ch=Math.round(L.pageH*ppi);
   const cv=document.createElement('canvas');cv.width=cw;cv.height=ch;
   const ctx=cv.getContext('2d');
@@ -754,10 +768,9 @@ async function exportPages(kind){
       st.textContent='@page{size:'+pw+'in '+ph+'in;margin:0}';
       const imgs=urls.map(u=>{const d=document.createElement('div');d.className='pp';const im=new Image();im.src=u;d.appendChild(im);area.appendChild(d);return im});
       await Promise.all(imgs.map(im=>im.decode().catch(()=>{})));
-      status('Opening the print dialog. Choose Actual Size / 100%.');
-      const cleanup=()=>{area.innerHTML='';urls.forEach(u=>URL.revokeObjectURL(u));removeEventListener('afterprint',cleanup)};
-      addEventListener('afterprint',cleanup);
-      window.print();
+      printUrls=urls;
+      const pn=$('#printNow');pn.hidden=false;
+      status('Pages are ready. Tap the button below to open the print dialog, and choose Actual Size / 100%.');
     }
   }catch(e){
     console.error(e);
