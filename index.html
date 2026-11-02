@@ -42,6 +42,8 @@ input[type=number],select{width:100%;min-height:44px;padding:8px 10px;border:1px
 .sw{display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer}
 .sw input{width:22px;height:22px;accent-color:var(--accent);flex:none}
 .sw.dis{opacity:.45}
+.lblrow{display:flex;align-items:center;gap:8px}
+#lblPos{min-height:40px;padding:0 12px;font-size:14px;flex:none}
 input[type=range]{width:100%;accent-color:var(--accent);height:32px}
 .sum{background:var(--tint);border-radius:12px;padding:12px;margin-top:12px}
 .sum .big{font-size:20px;font-weight:700}
@@ -75,15 +77,6 @@ canvas{display:block}
 .hd::after{content:"";position:absolute;left:21px;top:21px;width:2px;height:2px;background:#ff3b30}
 .hd span{position:absolute;left:32px;top:-2px;font:700 14px system-ui;color:#ff3b30;text-shadow:0 0 3px #fff,0 0 3px #fff}
 .mpanel{padding:12px 14px;border-top:1px solid var(--line);background:var(--card)}
-#printArea{display:none}
-@media print{
-  html,body{background:#fff!important;margin:0}
-  .app,.modal{display:none!important}
-  #printArea{display:block!important}
-  .pp{width:var(--pw);height:calc(var(--ph) - .01in);overflow:hidden;break-after:page;page-break-after:always}
-  .pp:last-child{break-after:auto;page-break-after:auto}
-  .pp img{width:100%;height:100%;display:block}
-}
 </style>
 </head>
 <body>
@@ -170,14 +163,15 @@ canvas{display:block}
         <h2>4 · Guides</h2>
         <label class="sw"><input type="checkbox" data-chk="cut"><span>Dotted cut lines (where pages join)</span></label>
         <div id="opWrap">
-          <label class="f" for="op">Cut line opacity: <b id="opVal"></b></label>
+          <label class="f" for="op">Line opacity: <b id="opVal"></b></label>
           <input type="range" id="op" min="10" max="100" step="5">
         </div>
+        <label class="sw"><input type="checkbox" data-chk="edge"><span>Dotted line at the edge of the image</span></label>
         <label class="sw" id="guidesRow"><input type="checkbox" data-chk="guides"><span>Overlap alignment guides (dash-dot)</span></label>
         <label class="sw"><input type="checkbox" data-chk="marks"><span>Registration marks</span></label>
-        <label class="sw"><input type="checkbox" data-chk="labels"><span>Page labels (e.g. “5 / 12 · R2 C1”)</span></label>
+        <div class="lblrow"><label class="sw" style="flex:1"><input type="checkbox" data-chk="labels"><span>Page labels (e.g. “5 / 12 · R2 C1”)</span></label><button class="btn" id="lblPos" type="button">Top left</button></div>
         <label class="sw"><input type="checkbox" data-chk="map"><span>Assembly map page with scale-check ruler</span></label>
-        <p class="hint">Labels sit in the corner of the image area, since printers can't print inside the margin. Turn them off if your design has detail there.</p>
+        <p class="hint">Labels sit on top of the image, since printers can't print inside the margin. Tap the corner button to move the label away from important detail.</p>
       </div>
 
       <div class="card">
@@ -188,14 +182,10 @@ canvas{display:block}
           <div><label class="f" for="fmt">Quality</label>
             <select id="fmt"><option value="jpeg">High (JPEG)</option><option value="png">Lossless (PNG)</option></select></div>
         </div>
-        <div class="row" style="margin-top:12px">
-          <button class="btn primary" id="pdfBtn" disabled>Download PDF</button>
-          <button class="btn" id="printBtn" disabled>Print…</button>
-        </div>
-        <button class="btn primary block" id="printNow" hidden style="margin-top:10px">Pages ready: open print dialog</button>
+        <button class="btn primary block" id="pdfBtn" style="margin-top:12px" disabled>Download PDF</button>
         <div class="bar" id="bar" hidden><i id="barI"></i></div>
         <div id="status"></div>
-        <p class="hint">When printing, choose <b>Actual Size / 100%</b> and turn off “Fit to page”. The ruler on the map page lets you check.</p>
+        <p class="hint">Open the PDF and print it from there, choosing <b>Actual Size / 100%</b> and turning off “Fit to page”. The ruler on the map page lets you check.</p>
       </div>
     </div>
 
@@ -250,18 +240,16 @@ canvas{display:block}
   </div>
 </div>
 
-<div id="printArea"></div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script>
 "use strict";
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const PAPERS={letter:[8.5,11],a4:[210/25.4,297/25.4]};
-const KEYS=['unit','paper','margin','orient','overlap','cut','cutOpacity','marks','labels','guides','map','ppi','fmt'];
+const KEYS=['unit','paper','margin','orient','overlap','cut','cutOpacity','marks','labels','guides','map','ppi','fmt','edge','labelPos'];
 const S={img:null,url:null,thumb:null,nw:0,nh:0,name:'image',dpi:300,
   unit:'in',mode:'size',widthIn:12,scalePct:100,pc:3,pr:3,
   paper:'letter',margin:0.25,orient:'auto',overlap:0,
-  cut:true,cutOpacity:0.7,marks:true,labels:true,guides:true,map:true,ppi:300,fmt:'jpeg',sel:0};
+  cut:true,cutOpacity:0.7,marks:true,labels:true,guides:true,map:true,ppi:300,fmt:'jpeg',edge:true,labelPos:'tl',sel:0};
 try{const o=JSON.parse(localStorage.getItem('tileprinter.v1')||'{}');KEYS.forEach(k=>{if(k in o)S[k]=o[k]})}catch(e){}
 const save=()=>{try{localStorage.setItem('tileprinter.v1',JSON.stringify(Object.fromEntries(KEYS.map(k=>[k,S[k]]))))}catch(e){}};
 
@@ -355,6 +343,17 @@ function renderTile(ctx,t,ppi,preview){
     if(t.r<rows-1){ctx.moveTo(dx,dy+dh-lw/2);ctx.lineTo(dx+dw,dy+dh-lw/2)}
     ctx.stroke();
   }
+  if(S.edge){
+    const lw=Math.max(1,Math.round(0.012*ppi));
+    ctx.lineWidth=lw;ctx.strokeStyle='rgba(0,0,0,'+S.cutOpacity+')';
+    ctx.setLineDash([0.025*ppi,0.045*ppi]);ctx.lineCap='butt';
+    ctx.beginPath();
+    if(t.c===0){ctx.moveTo(dx+lw/2,dy);ctx.lineTo(dx+lw/2,dy+dh)}
+    if(t.c===cols-1){ctx.moveTo(dx+dw-lw/2,dy);ctx.lineTo(dx+dw-lw/2,dy+dh)}
+    if(t.r===0){ctx.moveTo(dx,dy+lw/2);ctx.lineTo(dx+dw,dy+lw/2)}
+    if(t.r===rows-1){ctx.moveTo(dx,dy+dh-lw/2);ctx.lineTo(dx+dw,dy+dh-lw/2)}
+    ctx.stroke();
+  }
   if(S.guides&&o>0){
     const lw=Math.max(1,Math.round(0.008*ppi));
     ctx.lineWidth=lw;ctx.strokeStyle='rgba(0,0,0,'+Math.min(1,S.cutOpacity)+')';
@@ -386,7 +385,9 @@ function renderTile(ctx,t,ppi,preview){
     ctx.textBaseline='middle';ctx.textAlign='left';
     const txt=t.n+' / '+count+'  ·  R'+(t.r+1)+' C'+(t.c+1);
     const tw=ctx.measureText(txt).width,pad=0.035*ppi;
-    const bx=dx+0.07*ppi,by=dy+0.07*ppi,bw=tw+pad*2,bh=fp+pad*1.4;
+    const bw=tw+pad*2,bh=fp+pad*1.4,gap=0.07*ppi,lp=S.labelPos||'tl';
+    const bx=Math.max(dx,(lp==='tr'||lp==='br')?dx+dw-bw-gap:dx+gap);
+    const by=Math.max(dy,(lp==='bl'||lp==='br')?dy+dh-bh-gap:dy+gap);
     ctx.fillStyle='rgba(255,255,255,.88)';ctx.fillRect(bx,by,bw,bh);
     ctx.strokeStyle='rgba(0,0,0,.5)';ctx.lineWidth=1;ctx.setLineDash([]);ctx.strokeRect(bx,by,bw,bh);
     ctx.fillStyle='#000';ctx.fillText(txt,bx+pad,by+bh/2+1);
@@ -511,7 +512,9 @@ function syncFields(skip){
   set($('#margin'),r2(toU(S.margin)));
   set($('#paper'),S.paper);set($('#ppi'),S.ppi);set($('#fmt'),S.fmt);
   set($('#op'),Math.round(S.cutOpacity*100));$('#opVal').textContent=Math.round(S.cutOpacity*100)+'%';
-  $('#opWrap').hidden=!S.cut;
+  $('#opWrap').hidden=!(S.cut||S.edge);
+  const LP={tl:'Top left',tr:'Top right',br:'Bottom right',bl:'Bottom left'};
+  $('#lblPos').hidden=!S.labels;$('#lblPos').textContent=LP[S.labelPos]||'Top left';
   const gr=$('#guidesRow');gr.classList.toggle('dis',S.overlap===0);gr.querySelector('input').disabled=S.overlap===0;
   if(S.img){
     set($('#dpi'),S.dpi);
@@ -522,7 +525,7 @@ function syncFields(skip){
     $('#nativeSize').textContent=S.nw+' × '+S.nh+' px  =  '+f2(toU(nwI))+' × '+f2(toU(nhI))+' '+S.unit+' at '+S.dpi+' DPI';
   }
   const ok=!!L&&!busy;
-  $('#pdfBtn').disabled=!ok;$('#printBtn').disabled=!ok;$('#measureBtn').disabled=!S.img;
+  $('#pdfBtn').disabled=!ok;$('#measureBtn').disabled=!S.img;
 }
 let rafId=0,pendSkip=null;
 function sched(skip){pendSkip=skip||null;if(rafId)return;rafId=requestAnimationFrame(()=>{rafId=0;update(pendSkip)})}
@@ -629,6 +632,7 @@ $('#paper').addEventListener('change',e=>{S.paper=e.target.value;update()});
 $('#ppi').addEventListener('change',e=>{S.ppi=parseInt(e.target.value,10);save()});
 $('#fmt').addEventListener('change',e=>{S.fmt=e.target.value;save()});
 $('#op').addEventListener('input',e=>{S.cutOpacity=parseInt(e.target.value,10)/100;$('#opVal').textContent=e.target.value+'%';sched(e.target)});
+$('#lblPos').addEventListener('click',()=>{const o=['tl','tr','br','bl'];S.labelPos=o[(o.indexOf(S.labelPos)+1)%4];update()});
 $('#prev').addEventListener('click',()=>{if(!L)return;S.sel=(S.sel-1+L.count)%L.count;drawOverview();drawPage()});
 $('#next').addEventListener('click',()=>{if(!L)return;S.sel=(S.sel+1)%L.count;drawOverview();drawPage()});
 $('#ov').addEventListener('click',e=>{
@@ -719,15 +723,11 @@ $('#mApply').addEventListener('click',()=>{
 function progress(i,n,msg){
   $('#bar').hidden=false;$('#barI').style.width=Math.round(i/n*100)+'%';status(msg)
 }
-let printUrls=[];
-$('#printNow').addEventListener('click',()=>window.print());
-function setBusy(b){busy=b;$('#pdfBtn').disabled=b||!L;$('#printBtn').disabled=b||!L}
-async function exportPages(kind){
+function setBusy(b){busy=b;$('#pdfBtn').disabled=b||!L}
+async function exportPages(){
   if(!L||busy)return;
-  if(kind==='pdf'&&!(window.jspdf&&window.jspdf.jsPDF)){status('The PDF library did not load (offline?). Use Print instead, or reload when online.',true);return}
+  if(!(window.jspdf&&window.jspdf.jsPDF)){status('The PDF library did not load (offline?). Reload the page when you are online.',true);return}
   setBusy(true);status('');
-  $('#printNow').hidden=true;$('#printArea').innerHTML='';
-  printUrls.forEach(u=>URL.revokeObjectURL(u));printUrls=[];
   const ppi=S.ppi,cw=Math.round(L.pageW*ppi),ch=Math.round(L.pageH*ppi);
   const cv=document.createElement('canvas');cv.width=cw;cv.height=ch;
   const ctx=cv.getContext('2d');
@@ -737,41 +737,22 @@ async function exportPages(kind){
   const png=S.fmt==='png',mime=png?'image/png':'image/jpeg';
   const orient=L.ori==='p'?'portrait':'landscape';
   const pw=L.pageW,ph=L.pageH,total=jobs.length;
-  let doc=null;const urls=[];
   try{
-    if(kind==='pdf')doc=new window.jspdf.jsPDF({orientation:orient,unit:'in',format:[pw,ph],compress:true});
+    const doc=new window.jspdf.jsPDF({orientation:orient,unit:'in',format:[pw,ph],compress:true});
     for(let i=0;i<total;i++){
       progress(i,total,'Rendering page '+(i+1)+' of '+total+'…');
       await new Promise(r=>setTimeout(r,20));
       if(jobs[i].map)renderMap(ctx,ppi);else renderTile(ctx,jobs[i].t,ppi,false);
-      if(kind==='pdf'){
-        if(i>0)doc.addPage([pw,ph],orient);
-        doc.addImage(cv.toDataURL(mime,0.95),png?'PNG':'JPEG',0,0,pw,ph,undefined,'FAST');
-      }else{
-        const blob=await new Promise(r=>cv.toBlob(r,mime,0.95));
-        urls.push(URL.createObjectURL(blob));
-      }
+      if(i>0)doc.addPage([pw,ph],orient);
+      doc.addImage(cv.toDataURL(mime,0.95),png?'PNG':'JPEG',0,0,pw,ph,undefined,'FAST');
     }
-    progress(total,total,kind==='pdf'?'Building PDF…':'Preparing print…');
-    if(kind==='pdf'){
-      await new Promise(r=>setTimeout(r,20));
-      const blob=doc.output('blob');
-      const nm=(S.name+'-'+f2(toU(L.W)).replace('.00','')+'x'+f2(toU(L.H)).replace('.00','')+S.unit+'-tiles.pdf').replace(/[^\w.\-]+/g,'_');
-      const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nm;document.body.appendChild(a);a.click();a.remove();
-      setTimeout(()=>URL.revokeObjectURL(a.href),60000);
-      status('Done: '+total+' pages. If nothing downloaded, check your browser downloads.');
-    }else{
-      const area=$('#printArea');
-      area.innerHTML='';
-      area.style.setProperty('--pw',pw+'in');area.style.setProperty('--ph',ph+'in');
-      let st=$('#pageRule');if(!st){st=document.createElement('style');st.id='pageRule';document.head.appendChild(st)}
-      st.textContent='@page{size:'+pw+'in '+ph+'in;margin:0}';
-      const imgs=urls.map(u=>{const d=document.createElement('div');d.className='pp';const im=new Image();im.src=u;d.appendChild(im);area.appendChild(d);return im});
-      await Promise.all(imgs.map(im=>im.decode().catch(()=>{})));
-      printUrls=urls;
-      const pn=$('#printNow');pn.hidden=false;
-      status('Pages are ready. Tap the button below to open the print dialog, and choose Actual Size / 100%.');
-    }
+    progress(total,total,'Building PDF…');
+    await new Promise(r=>setTimeout(r,20));
+    const blob=doc.output('blob');
+    const nm=(S.name+'-'+f2(toU(L.W)).replace('.00','')+'x'+f2(toU(L.H)).replace('.00','')+S.unit+'-tiles.pdf').replace(/[^\w.\-]+/g,'_');
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nm;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+    status('Done: '+total+' pages. If nothing downloaded, check your browser downloads.');
   }catch(e){
     console.error(e);
     status('Something went wrong while exporting. Try a lower resolution.',true);
@@ -779,8 +760,7 @@ async function exportPages(kind){
     $('#bar').hidden=true;setBusy(false);
   }
 }
-$('#pdfBtn').addEventListener('click',()=>exportPages('pdf'));
-$('#printBtn').addEventListener('click',()=>exportPages('print'));
+$('#pdfBtn').addEventListener('click',()=>exportPages());
 
 update();
 </script>
